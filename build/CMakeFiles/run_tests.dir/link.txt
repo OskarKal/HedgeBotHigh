@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/run_tests.dir/link.d CMakeFiles/run_tests.dir/tests/unit_tests.cpp.o -o run_tests  libhedgebot_lib.a

@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/hedge_bot.dir/link.d CMakeFiles/hedge_bot.dir/src/main.cpp.o -o bin/hedge_bot  libhedgebot_lib.a

@@ -1,6 +1,0 @@
-/home/oskark/inf/HedgeBot/build/CMakeFiles/hedgebot_lib.dir
-/home/oskark/inf/HedgeBot/build/CMakeFiles/hedge_bot.dir
-/home/oskark/inf/HedgeBot/build/CMakeFiles/run_tests.dir
-/home/oskark/inf/HedgeBot/build/CMakeFiles/test.dir
-/home/oskark/inf/HedgeBot/build/CMakeFiles/edit_cache.dir
-/home/oskark/inf/HedgeBot/build/CMakeFiles/rebuild_cache.dir
