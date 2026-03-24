@@ -1,0 +1,140 @@
+bot_config:
+  # Data configuration
+  data_path: "/data/market"
+  data_sources:
+    - name: "stock_prices"
+      type: "csv"
+      path: "data/stock_prices.csv"
+    - name: "option_surface"
+      type: "csv"
+      path: "data/option_surface.csv"
+  
+  # Pricing models configuration
+  models:
+    BSM:
+      enabled: true
+      rate: 0.05
+      dividend_yield: 0.02
+    
+    Merton:
+      enabled: true
+      lambda: 0.1           # Jump intensity
+      mu_j: -0.05          # Mean log-jump
+      sigma_j: 0.15        # Jump volatility
+  
+  # Calibration settings
+  calibration:
+    window_days: 30
+    update_frequency: "monthly"
+    method: "LevenbergMarquardt"
+    tolerance: 1e-6
+    max_iterations: 1000
+  
+  # Hedging strategy configuration
+  hedging:
+    strategy: "delta_gamma_vega"
+    rebalance_interval_seconds: 3600    # 1 hour
+    delta_threshold: 0.05               # 5% change threshold
+    gamma_threshold: 0.01
+    vega_threshold: 0.02
+    
+    # Rebalancing instruments
+    instruments:
+      - type: "underlying"
+        symbol: "SPY"
+      - type: "futures"
+        symbol: "ES"
+        beta: 1.0
+    
+    # Protective strategies
+    protective_collar:
+      enabled: true
+      put_strike_pct: 0.95  # 5% OTM put
+      call_strike_pct: 1.05 # 5% OTM call
+  
+  # Execution settings
+  execution:
+    broker_simulator:
+      commission: 0.001         # 0.1% fee
+      slippage_model: "spread"
+      slippage_spread: 0.001    # 0.1% spread
+      market_impact: 0.0001     # 0.01% market impact
+  
+  # Risk management
+  risk_management:
+    max_position_delta: 0.20
+    max_position_gamma: 0.05
+    max_position_vega: 1000.0
+    
+    var_method: "historical"   # historical, parametric, monte_carlo
+    var_confidence: 0.95
+    var_lookback_days: 252
+    
+    max_drawdown_pct: 0.10     # 10% max drawdown
+    stop_loss_pct: 0.05        # 5% stop loss
+    
+    circuit_breaker:
+      enabled: true
+      drawdown_threshold: 0.15  # 15% drawdown triggers breaker
+      recovery_threshold: 0.10  # Resume at 10% recovery
+  
+  # Backtesting settings
+  backtesting:
+    start_date: "2024-01-01"
+    end_date: "2025-12-31"
+    initial_capital: 1000000.0
+    walk_forward_period: 30     # days
+    rebalance_frequency: "daily"
+    
+    # Performance metrics
+    metrics:
+      - "sharpe_ratio"
+      - "max_drawdown"
+      - "hit_rate"
+      - "sortino_ratio"
+      - "calmar_ratio"
+  
+  # Monte Carlo simulation
+  monte_carlo:
+    enabled: true
+    num_paths: 10000
+    steps_per_year: 252
+    num_days: 252
+    confidence_level: 0.95
+    
+    # Scenario generation
+    scenarios:
+      - name: "baseline"
+        probability: 0.7
+        vol_shock: 0.0
+        skew_shock: 0.0
+      
+      - name: "vol_spike"
+        probability: 0.2
+        vol_shock: 0.5
+        skew_shock: 0.1
+      
+      - name: "crisis"
+        probability: 0.1
+        vol_shock: 1.0
+        skew_shock: -0.5
+  
+  # Logging and monitoring
+  logging:
+    level: "INFO"           # DEBUG, INFO, WARNING, ERROR
+    output: "file"          # console, file, both
+    log_path: "logs/hedgebot.log"
+    max_log_size_mb: 100
+    rotation_count: 10
+  
+  # API and monitoring
+  monitoring:
+    rest_api_enabled: true
+    rest_api_port: 8080
+    metrics_interval_seconds: 60
+    
+    # Alert thresholds
+    alerts:
+      delta_deviation: 0.10
+      gamma_spike: 0.05
+      leverage_limit: 3.0
