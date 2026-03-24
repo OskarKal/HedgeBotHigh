@@ -29,12 +29,37 @@ make -j$(nproc)
 │   ├── option_data.hpp         # OptionData class
 │   ├── pricer_base.hpp         # OptionPricer abstract class
 │   ├── bsm_pricer.hpp          # BSM_Pricer class
-│   └── merton_pricer.hpp       # MertonJump_Pricer class
+│   ├── merton_pricer.hpp       # MertonJump_Pricer class
+│   ├── backtester.hpp          # Backtester + batch backtest APIs
+│   ├── monte_carlo_simulator.hpp
+│   ├── broker_simulator.hpp
+│   └── risk_manager.hpp
 ├── tests/
 │   └── unit_tests.cpp          # Unit tests
 ├── config/
 │   └── bot_config.yaml         # Configuration
+├── data/
+│   ├── <SYMBOL>/spot_prices.csv
+│   ├── <SYMBOL>/option_surface.csv
+│   └── RATES/rates.csv
 └── CMakeLists.txt              # Build configuration
+```
+
+## Multi-Instrument Backtest Layout
+
+The engine now expects one folder per instrument under data, plus a rates folder:
+
+```text
+data/
+	AAPL/
+		spot_prices.csv
+		option_surface.csv
+	NVDA/
+		spot_prices.csv
+		option_surface.csv
+	...
+	RATES/
+		rates.csv
 ```
 
 ## Core Classes
@@ -89,11 +114,10 @@ Edit `config/bot_config.yaml` for:
 
 ## Next Steps
 
-1. **Model Calibrator** - Fit parameters to market prices
-2. **Hedging Engine** - Automated rebalancing logic
-3. **Risk Manager** - VaR, position limits, circuit breaker
-4. **Backtester** - Historical simulations with metrics
-5. **Monte Carlo** - Scenario analysis and stress testing
+1. **CI/CD** - run build+tests in GitHub/GitLab pipelines
+2. **Docker** - build runtime image and run the demo/backtests
+3. **Model Extensions** - add local-vol and Heston pricers
+4. **Reporting** - export per-instrument backtest summaries
 
 See `DEVELOPMENT.md` for detailed roadmap.
 
@@ -105,7 +129,7 @@ See `DEVELOPMENT.md` for detailed roadmap.
 
 **Tests fail**
 - Run `./build/run_tests` to check
-- All 4 tests should pass
+- All 20 tests should pass
 
 **Price seems wrong**
 - Verify input parameters (spot, strike, time, vol, rate)

@@ -1,0 +1,37 @@
+stages:
+  - build
+  - test
+  - docker
+
+variables:
+  BUILD_DIR: "build"
+
+before_script:
+  - apt-get update && apt-get install -y --no-install-recommends build-essential cmake ca-certificates
+
+build:
+  stage: build
+  script:
+    - cmake -S . -B ${BUILD_DIR} -DCMAKE_BUILD_TYPE=Release
+    - cmake --build ${BUILD_DIR} -j"$(nproc)"
+  artifacts:
+    paths:
+      - ${BUILD_DIR}/
+
+unit_tests:
+  stage: test
+  needs:
+    - build
+  script:
+    - ./${BUILD_DIR}/run_tests
+
+docker_build:
+  stage: docker
+  image: docker:27
+  services:
+    - docker:27-dind
+  variables:
+    DOCKER_TLS_CERTDIR: ""
+  before_script: []
+  script:
+    - docker build -t hedgebot:latest .

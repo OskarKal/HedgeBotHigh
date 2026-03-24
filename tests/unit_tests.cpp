@@ -9,6 +9,7 @@
 #include "hedgebot/risk_manager.hpp"
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -486,6 +487,121 @@ int main() {
         expect(!res.equity_curve.empty(), "Backtest should produce equity curve");
         expect(res.equity_curve.size() == res.pnl_curve.size(), "Equity/PnL curve size mismatch");
 
+        std::cout << "PASSED\n";
+    }
+
+    // Test 19: MarketDataFetcher supports multi-instrument folder layout
+    {
+        std::cout << "Test 19: Multi-instrument data layout... ";
+
+        namespace fs = std::filesystem;
+        const fs::path root = "/tmp/hedgebot_multi_layout";
+        fs::remove_all(root);
+        fs::create_directories(root / "AAA");
+        fs::create_directories(root / "BBB");
+        fs::create_directories(root / "RATES");
+
+        {
+            std::ofstream out((root / "AAA" / "spot_prices.csv").string());
+            out << "timestamp,close\n1700000000,100\n1700000060,101\n1700000120,102\n";
+        }
+        {
+            std::ofstream out((root / "AAA" / "option_surface.csv").string());
+            out << "type,strike,maturity,bid,ask,implied_vol\n";
+            out << "CALL,100,0.08,2.9,3.1,0.2\n";
+        }
+        {
+            std::ofstream out((root / "BBB" / "spot_prices.csv").string());
+            out << "timestamp,close\n1700000000,50\n1700000060,50.5\n1700000120,51\n";
+        }
+        {
+            std::ofstream out((root / "BBB" / "option_surface.csv").string());
+            out << "type,strike,maturity,bid,ask,implied_vol\n";
+            out << "CALL,50,0.08,1.4,1.6,0.25\n";
+        }
+        {
+            std::ofstream out((root / "RATES" / "rates.csv").string());
+            out << "timestamp,rate\n1700000000,0.02\n";
+        }
+
+        MarketDataFetcher fetcher;
+        const auto symbols = fetcher.discover_instruments(root.string());
+        expect(symbols.size() == 2, "Expected two discovered instruments");
+        expect(symbols[0] == "AAA", "Expected sorted symbol AAA");
+        expect(symbols[1] == "BBB", "Expected sorted symbol BBB");
+
+        const auto rates = fetcher.load_rates_from_layout(root.string());
+        expect(rates.size() == 1, "Expected one rates row");
+
+        fs::remove_all(root);
+        std::cout << "PASSED\n";
+    }
+
+    // Test 20: Backtester batch run across instrument folders
+    {
+        std::cout << "Test 20: Batch backtest from layout... ";
+
+        namespace fs = std::filesystem;
+        const fs::path root = "/tmp/hedgebot_batch_layout";
+        fs::remove_all(root);
+        fs::create_directories(root / "AAA");
+        fs::create_directories(root / "BBB");
+        fs::create_directories(root / "RATES");
+
+        {
+            std::ofstream out((root / "AAA" / "spot_prices.csv").string());
+            out << "timestamp,close\n1700000000,100\n1700000060,101\n1700000120,102\n1700000180,103\n";
+        }
+        {
+            std::ofstream out((root / "AAA" / "option_surface.csv").string());
+            out << "type,strike,maturity,bid,ask,implied_vol\n";
+            out << "CALL,100,0.08,2.9,3.1,0.2\nPUT,100,0.08,2.7,2.9,0.21\n";
+        }
+        {
+            std::ofstream out((root / "BBB" / "spot_prices.csv").string());
+            out << "timestamp,close\n1700000000,50\n1700000060,49.5\n1700000120,50.2\n1700000180,50.7\n";
+        }
+        {
+            std::ofstream out((root / "BBB" / "option_surface.csv").string());
+            out << "type,strike,maturity,bid,ask,implied_vol\n";
+            out << "CALL,50,0.08,1.4,1.6,0.25\nPUT,50,0.08,1.3,1.5,0.26\n";
+        }
+        {
+            std::ofstream out((root / "RATES" / "rates.csv").string());
+            out << "timestamp,rate\n1700000000,0.02\n1700000180,0.02\n";
+        }
+
+        BacktestConfig bt_cfg;
+        bt_cfg.initial_cash = 10000.0;
+        bt_cfg.calibration_window_steps = 2;
+        bt_cfg.option_roll_steps = 3;
+        bt_cfg.underlying_symbol = "SPOT";
+
+        HedgeConfig hedge_cfg;
+        hedge_cfg.delta_threshold = 0.01;
+        hedge_cfg.gamma_threshold = 10.0;
+        hedge_cfg.vega_threshold = 1000.0;
+        hedge_cfg.rebalance_interval_seconds = 60;
+
+        ExecutionConfig exec_cfg;
+        exec_cfg.fixed_commission = 0.0;
+        exec_cfg.commission_rate = 0.0;
+        exec_cfg.slippage_bps = 0.0;
+
+        Backtester bt(bt_cfg);
+        const auto batch = bt.run_batch_from_layout(root.string(), hedge_cfg, exec_cfg);
+        expect(batch.success, "Batch backtest should succeed");
+        expect(batch.instrument_results.size() == 2, "Expected two instrument results");
+
+        int ok = 0;
+        for (const auto& one : batch.instrument_results) {
+            if (one.result.success) {
+                ++ok;
+            }
+        }
+        expect(ok == 2, "Expected successful result for each instrument");
+
+        fs::remove_all(root);
         std::cout << "PASSED\n";
     }
     

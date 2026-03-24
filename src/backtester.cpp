@@ -28,6 +28,56 @@ std::vector<PriceBar> sorted_prices(const std::vector<PriceBar>& input) {
     return p;
 }
 
+std::vector<OptionQuote> prepare_calibration_surface(const std::vector<OptionQuote>& surface) {
+    if (surface.empty()) {
+        return {};
+    }
+
+    // Keep the nearest positive maturity slice to stabilize and speed calibration.
+    double best_maturity = 0.0;
+    bool found = false;
+    for (const auto& q : surface) {
+        if (q.maturity > 0.0) {
+            if (!found || q.maturity < best_maturity) {
+                best_maturity = q.maturity;
+                found = true;
+            }
+        }
+    }
+    if (!found) {
+        return {};
+    }
+
+    std::vector<OptionQuote> slice;
+    for (const auto& q : surface) {
+        if (std::abs(q.maturity - best_maturity) < 1e-10) {
+            slice.push_back(q);
+        }
+    }
+
+    std::sort(slice.begin(), slice.end(), [](const OptionQuote& a, const OptionQuote& b) {
+        if (a.type == b.type) {
+            return a.strike < b.strike;
+        }
+        return static_cast<int>(a.type) < static_cast<int>(b.type);
+    });
+
+    // Downsample very dense strike grids.
+    constexpr std::size_t kMaxPoints = 48;
+    if (slice.size() <= kMaxPoints) {
+        return slice;
+    }
+
+    std::vector<OptionQuote> sampled;
+    sampled.reserve(kMaxPoints);
+    const double step = static_cast<double>(slice.size() - 1) / static_cast<double>(kMaxPoints - 1);
+    for (std::size_t i = 0; i < kMaxPoints; ++i) {
+        const std::size_t idx = static_cast<std::size_t>(std::round(step * static_cast<double>(i)));
+        sampled.push_back(slice[std::min(idx, slice.size() - 1)]);
+    }
+    return sampled;
+}
+
 } // namespace
 
 Backtester::Backtester(const BacktestConfig& config) : config_(config) {}
@@ -104,15 +154,17 @@ BacktestResult Backtester::run_from_data(
     ModelCalibrator calibrator;
     BSM_Pricer bsm;
 
+    const auto calib_surface = prepare_calibration_surface(option_surface);
+
     double calibrated_sigma = config_.initial_vol_guess;
-    if (!option_surface.empty()) {
+    if (!calib_surface.empty()) {
         MarketData calib_md;
         calib_md.spot_price = px.front().close;
         calib_md.risk_free_rate = config_.risk_free_rate;
         calib_md.dividend_yield = config_.dividend_yield;
-        calib_md.time_to_expiry = option_surface.front().maturity;
+        calib_md.time_to_expiry = calib_surface.front().maturity;
         calib_md.current_vol = config_.initial_vol_guess;
-        const auto bsm_fit = calibrator.calibrate_bsm_vol(option_surface, calib_md, 0.01, 2.0, 80);
+        const auto bsm_fit = calibrator.calibrate_bsm_vol(calib_surface, calib_md, 0.01, 2.0, 60);
         calibrated_sigma = bsm_fit.sigma;
     }
 
@@ -145,14 +197,14 @@ BacktestResult Backtester::run_from_data(
         }
 
         // Recalibrate periodically from the provided surface snapshot.
-        if (!option_surface.empty() && config_.calibration_window_steps > 0 && (i % config_.calibration_window_steps == 0)) {
+        if (!calib_surface.empty() && config_.calibration_window_steps > 0 && (i % config_.calibration_window_steps == 0)) {
             MarketData calib_md;
             calib_md.spot_price = px[i - 1].close;
             calib_md.risk_free_rate = latest_rate_before(rates, ts_prev, config_.risk_free_rate);
             calib_md.dividend_yield = config_.dividend_yield;
-            calib_md.time_to_expiry = option_surface.front().maturity;
+            calib_md.time_to_expiry = calib_surface.front().maturity;
             calib_md.current_vol = calibrated_sigma;
-            const auto bsm_fit = calibrator.calibrate_bsm_vol(option_surface, calib_md, 0.01, 2.0, 80);
+            const auto bsm_fit = calibrator.calibrate_bsm_vol(calib_surface, calib_md, 0.01, 2.0, 60);
             calibrated_sigma = bsm_fit.sigma;
         }
 
@@ -210,6 +262,65 @@ BacktestResult Backtester::run_from_data(
     result.success = true;
     result.message = "ok";
     return result;
+}
+
+BatchBacktestResult Backtester::run_batch_from_layout(
+    const std::string& data_root,
+    const HedgeConfig& hedge_config,
+    const ExecutionConfig& execution_config,
+    const std::string& rates_folder) const {
+    BatchBacktestResult out;
+
+    MarketDataFetcher fetcher;
+    DataNormalizer normalizer;
+
+    const auto symbols = fetcher.discover_instruments(data_root);
+    if (symbols.empty()) {
+        out.message = "No instrument folders found";
+        return out;
+    }
+
+    std::vector<RatePoint> rates;
+    try {
+        rates = fetcher.load_rates_from_layout(data_root, rates_folder);
+    } catch (const std::exception&) {
+        rates.clear();
+    }
+
+    double pnl_sum = 0.0;
+    std::size_t ok_count = 0;
+
+    for (const auto& symbol : symbols) {
+        InstrumentBacktestResult one;
+        one.symbol = symbol;
+
+        try {
+            auto bundle = fetcher.load_instrument_bundle(data_root, symbol);
+            auto px = normalizer.sanitize_prices(bundle.prices);
+            auto surf = normalizer.sanitize_option_surface(bundle.option_surface);
+
+            one.result = run_from_data(px, surf, rates, hedge_config, execution_config);
+            if (one.result.success) {
+                pnl_sum += one.result.total_pnl;
+                ++ok_count;
+            }
+        } catch (const std::exception& e) {
+            one.result.success = false;
+            one.result.message = e.what();
+        }
+
+        out.instrument_results.push_back(one);
+    }
+
+    if (ok_count == 0) {
+        out.message = "All instrument backtests failed";
+        return out;
+    }
+
+    out.success = true;
+    out.average_total_pnl = pnl_sum / static_cast<double>(ok_count);
+    out.message = "ok";
+    return out;
 }
 
 } // namespace hedgebot

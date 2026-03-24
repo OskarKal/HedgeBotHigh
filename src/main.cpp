@@ -1,9 +1,12 @@
+#include "hedgebot/backtester.hpp"
 #include "hedgebot/bsm_pricer.hpp"
 #include "hedgebot/hedging_engine.hpp"
+#include "hedgebot/market_data.hpp"
 #include "hedgebot/merton_pricer.hpp"
 #include "hedgebot/option_data.hpp"
 #include "hedgebot/common.hpp"
 
+#include <filesystem>
 #include <iostream>
 #include <iomanip>
 #include <cmath>
@@ -181,6 +184,59 @@ int main() {
             5000.0,
             50.0);
         std::cout << "Beta-weighted futures contracts (example): " << futures_contracts << "\n";
+
+        // Test 5: Batch backtest from data layout (data/<SYMBOL>/ and data/RATES/)
+        std::cout << "\n================================\n";
+        std::cout << "Test 5: Batch Backtest From Data Layout\n";
+        std::cout << "================================\n";
+
+        const std::string data_root = "data";
+        if (std::filesystem::exists(data_root) && std::filesystem::is_directory(data_root)) {
+            BacktestConfig bt_cfg;
+            bt_cfg.initial_cash = 100000.0;
+            bt_cfg.risk_free_rate = 0.02;
+            bt_cfg.dividend_yield = 0.0;
+            bt_cfg.calibration_window_steps = 60;
+            bt_cfg.option_roll_steps = 120;
+            bt_cfg.strike_moneyness = 1.0;
+            bt_cfg.underlying_symbol = "SPOT";
+
+            HedgeConfig bt_hedge_cfg;
+            bt_hedge_cfg.delta_threshold = 0.10;
+            bt_hedge_cfg.gamma_threshold = 1.0;
+            bt_hedge_cfg.vega_threshold = 1000.0;
+            bt_hedge_cfg.rebalance_interval_seconds = 600;
+
+            ExecutionConfig bt_exec_cfg;
+            bt_exec_cfg.fixed_commission = 0.0;
+            bt_exec_cfg.commission_rate = 0.0;
+            bt_exec_cfg.slippage_bps = 0.0;
+
+            Backtester backtester(bt_cfg);
+            auto batch = backtester.run_batch_from_layout(data_root, bt_hedge_cfg, bt_exec_cfg, "RATES");
+
+            if (!batch.success) {
+                std::cout << "Batch backtest unavailable: " << batch.message << "\n";
+            }
+
+            std::cout << "Batch backtest details:\n";
+            std::cout << "  Instruments seen: " << batch.instrument_results.size() << "\n";
+            if (batch.success) {
+                std::cout << "  Average PnL: " << std::fixed << std::setprecision(4)
+                          << batch.average_total_pnl << "\n";
+            }
+
+            for (const auto& one : batch.instrument_results) {
+                std::cout << "  - " << one.symbol << ": "
+                          << (one.result.success ? "OK" : "FAIL")
+                          << ", msg=" << one.result.message
+                          << ", PnL=" << one.result.total_pnl
+                          << ", Sharpe=" << one.result.sharpe
+                          << ", MaxDD=" << one.result.max_drawdown_pct << "\n";
+            }
+        } else {
+            std::cout << "Data folder not found, skipping batch backtest demo.\n";
+        }
         
         std::cout << "\n=== Initialization Successful ===\n";
         std::cout << "Project structure and basic pricing engine ready!\n";

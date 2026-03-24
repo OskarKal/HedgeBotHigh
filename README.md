@@ -59,6 +59,51 @@ HedgeBot/
 └── README.md              # This file
 ```
 
+## Multi-Instrument Data Layout
+
+The backtester now supports a folder-per-instrument layout.
+
+```
+data/
+├── AAPL/
+│   ├── spot_prices.csv
+│   └── option_surface.csv
+├── NVDA/
+│   ├── spot_prices.csv
+│   └── option_surface.csv
+├── QQQ/
+│   ├── spot_prices.csv
+│   └── option_surface.csv
+├── SPY/
+│   ├── spot_prices.csv
+│   └── option_surface.csv
+├── TSLA/
+│   ├── spot_prices.csv
+│   └── option_surface.csv
+└── RATES/
+  └── rates.csv
+```
+
+Required CSV schemas:
+
+`spot_prices.csv`
+```csv
+timestamp,close
+1774359000,651.52
+```
+
+`option_surface.csv`
+```csv
+type,strike,maturity,bid,ask,implied_vol
+CALL,650,0.0032,7.54,7.68,0.1901
+```
+
+`rates.csv`
+```csv
+timestamp,rate
+1773810000,0.0362
+```
+
 ## Building the Project
 
 ### Requirements
@@ -203,29 +248,27 @@ bot_config:
 
 ## Current Status
 
-### ✅ Completed
+### Completed
 - Project structure and CMake configuration
-- Core mathematical utilities and types
-- Black-Scholes-Merton pricer with analytics Greeks
+- MarketDataFetcher and DataNormalizer
+- Black-Scholes-Merton pricer with analytical Greeks
 - Merton Jump-Diffusion pricer with numerical Greeks
-- Unit test framework
-- Configuration file template
-- Documentation
+- ModelCalibrator (BSM + Merton)
+- HedgingEngine (delta/gamma/vega checks, threshold/time rebalance)
+- BrokerSimulator (execution, slippage/commission, PnL, equity)
+- RiskManager (historical VaR/ES, leverage, drawdown, stop-loss/circuit-breaker)
+- MonteCarloSimulator (GBM paths, terminal distribution, option PnL simulation)
+- Backtester with walk-forward hooks and batch multi-instrument layout support
+- Expanded test suite (unit + integration-style checks)
 
-### 🔄 In Progress
-- Greeks calculator module extension
+### In Progress
+- Additional unit/integration coverage on real-market datasets
 
-### 📋 To Do
-- Model calibrator (LM, Nelder-Mead, PSO optimization)
-- Hedging engine (rebalancing logic, instrument selection)
-- Broker simulator (order execution, P&L tracking)
-- Risk manager (VaR, limits, circuit breaker)
-- Backtester (walk-forward, metrics calculation)
-- Monte Carlo simulator (path generation, scenarios)
-- Additional pricers (Dupire, Heston)
+### Remaining TODO
 - CI/CD pipeline and Docker containerization
-- REST API monitoring interface
-- Production hardening
+- Documentation refresh for operational workflow and examples
+- Additional pricing models (Dupire, Heston)
+- REST API/monitoring surface
 
 ## Usage Examples
 
@@ -268,37 +311,10 @@ double jump_premium = merton_price - bsm_price;
 
 ## Next Steps
 
-1. **Implement Model Calibrator** (~2-3 weeks)
-   - Optimize BSM volatility to market prices
-   - Fit Merton parameters to vol smile
-   - Add Dupire and Heston pricers
-
-2. **Build Hedging Engine** (~2-3 weeks)
-   - Real-time Greeks monitoring
-   - Rebalancing logic and thresholds
-   - Delta/gamma/vega hedging positions
-
-3. **Add Risk Management** (~2 weeks)
-   - VaR calculations (historical, parametric)
-   - Position limits and margin tracking
-   - Circuit breaker automation
-
-4. **Create Backtester** (~2-3 weeks)
-   - Walk-forward parameter optimization
-   - Historical simulation engine
-   - Performance metrics and reporting
-
-5. **Implement Monte Carlo** (~1-2 weeks)
-   - Path generation for different models
-   - Scenario analysis and stress testing
-   - Greek verification
-
-6. **Production Hardening** (~2-3 weeks)
-   - Comprehensive error handling
-   - Performance optimization
-   - CI/CD pipeline and Docker
-   - REST API interface
-   - Logging and monitoring
+1. Integrate CI/CD with automated build + tests.
+2. Add Dockerfile and container runtime docs.
+3. Expand backtesting reports per instrument (CSV outputs, aggregated metrics).
+4. Add local-vol and Heston pricers and hook them into calibration/backtest modes.
 
 ## Testing Strategy
 

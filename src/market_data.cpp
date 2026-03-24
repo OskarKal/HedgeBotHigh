@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <limits>
 #include <numeric>
@@ -41,6 +42,13 @@ std::int64_t parse_int64(const std::string& token, const std::string& field_name
 	} catch (const std::exception&) {
 		throw std::runtime_error("Failed to parse field '" + field_name + "' with value '" + token + "'");
 	}
+}
+
+std::string to_upper_ascii(std::string s) {
+	for (char& c : s) {
+		c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+	}
+	return s;
 }
 
 } // namespace
@@ -102,7 +110,13 @@ std::vector<OptionQuote> MarketDataFetcher::load_option_surface(const std::strin
 
 	std::vector<OptionQuote> result;
 	std::string line;
-	bool first_line = true;
+	bool schema_initialized = false;
+	std::size_t idx_type = 0;
+	std::size_t idx_strike = 1;
+	std::size_t idx_maturity = 2;
+	std::size_t idx_bid = 3;
+	std::size_t idx_ask = 4;
+	std::size_t idx_iv = 5;
 
 	while (std::getline(in, line)) {
 		if (line.empty()) {
@@ -114,22 +128,65 @@ std::vector<OptionQuote> MarketDataFetcher::load_option_surface(const std::strin
 			continue;
 		}
 
-		if (first_line) {
-			first_line = false;
-			if (!tokens[0].empty() && (tokens[0][0] == 'C' || tokens[0][0] == 'P')) {
-				// First line is already data.
-			} else {
+		if (!schema_initialized) {
+			schema_initialized = true;
+
+			// Header-based schema detection.
+			bool has_header = false;
+			for (std::size_t i = 0; i < tokens.size(); ++i) {
+				const std::string h = to_upper_ascii(tokens[i]);
+				if (h == "TYPE") {
+					idx_type = i;
+					has_header = true;
+				} else if (h == "STRIKE") {
+					idx_strike = i;
+					has_header = true;
+				} else if (h == "MATURITY") {
+					idx_maturity = i;
+					has_header = true;
+				} else if (h == "BID") {
+					idx_bid = i;
+					has_header = true;
+				} else if (h == "ASK") {
+					idx_ask = i;
+					has_header = true;
+				} else if (h == "IMPLIED_VOL") {
+					idx_iv = i;
+					has_header = true;
+				}
+			}
+
+			if (has_header) {
 				continue;
+			}
+
+			// No header: if first column is numeric timestamp and second is option type,
+			// map indices to [type,strike,maturity,bid,ask,iv] starting at column 1.
+			if (tokens.size() >= 7) {
+				const std::string t1 = to_upper_ascii(tokens[1]);
+				if (t1 == "CALL" || t1 == "PUT" || t1 == "C" || t1 == "P") {
+					idx_type = 1;
+					idx_strike = 2;
+					idx_maturity = 3;
+					idx_bid = 4;
+					idx_ask = 5;
+					idx_iv = 6;
+				}
 			}
 		}
 
+		if (tokens.size() <= std::max({idx_type, idx_strike, idx_maturity, idx_bid, idx_ask, idx_iv})) {
+			continue;
+		}
+
 		OptionQuote row;
-		row.type = (tokens[0] == "C" || tokens[0] == "CALL") ? OptionType::CALL : OptionType::PUT;
-		row.strike = parse_double(tokens[1], "strike");
-		row.maturity = parse_double(tokens[2], "maturity");
-		row.bid = parse_double(tokens[3], "bid");
-		row.ask = parse_double(tokens[4], "ask");
-		row.implied_vol = parse_double(tokens[5], "implied_vol");
+		const std::string type_token = to_upper_ascii(tokens[idx_type]);
+		row.type = (type_token == "C" || type_token == "CALL") ? OptionType::CALL : OptionType::PUT;
+		row.strike = parse_double(tokens[idx_strike], "strike");
+		row.maturity = parse_double(tokens[idx_maturity], "maturity");
+		row.bid = parse_double(tokens[idx_bid], "bid");
+		row.ask = parse_double(tokens[idx_ask], "ask");
+		row.implied_vol = parse_double(tokens[idx_iv], "implied_vol");
 		result.push_back(row);
 	}
 
@@ -181,6 +238,63 @@ std::vector<RatePoint> MarketDataFetcher::load_rate_data(const std::string& file
 		return a.timestamp < b.timestamp;
 	});
 	return result;
+}
+
+std::vector<std::string> MarketDataFetcher::discover_instruments(const std::string& data_root) const {
+	namespace fs = std::filesystem;
+	fs::path root(data_root);
+	if (!fs::exists(root) || !fs::is_directory(root)) {
+		throw std::runtime_error("discover_instruments: data root is not a directory: " + data_root);
+	}
+
+	std::vector<std::string> symbols;
+	for (const auto& entry : fs::directory_iterator(root)) {
+		if (!entry.is_directory()) {
+			continue;
+		}
+
+		const std::string name = entry.path().filename().string();
+		if (to_upper_ascii(name) == "RATES") {
+			continue;
+		}
+
+		const fs::path spot = entry.path() / "spot_prices.csv";
+		const fs::path surface = entry.path() / "option_surface.csv";
+		if (fs::exists(spot) && fs::exists(surface)) {
+			symbols.push_back(name);
+		}
+	}
+
+	std::sort(symbols.begin(), symbols.end());
+	return symbols;
+}
+
+InstrumentDataBundle MarketDataFetcher::load_instrument_bundle(const std::string& data_root, const std::string& symbol) const {
+	namespace fs = std::filesystem;
+	const fs::path base = fs::path(data_root) / symbol;
+
+	InstrumentDataBundle bundle;
+	bundle.symbol = symbol;
+	bundle.prices = load_price_data((base / "spot_prices.csv").string());
+	bundle.option_surface = load_option_surface((base / "option_surface.csv").string());
+	return bundle;
+}
+
+std::vector<InstrumentDataBundle> MarketDataFetcher::load_all_instruments(const std::string& data_root) const {
+	std::vector<InstrumentDataBundle> all;
+	for (const auto& symbol : discover_instruments(data_root)) {
+		all.push_back(load_instrument_bundle(data_root, symbol));
+	}
+	return all;
+}
+
+std::vector<RatePoint> MarketDataFetcher::load_rates_from_layout(
+	const std::string& data_root,
+	const std::string& rates_folder,
+	const std::string& rates_file) const {
+	namespace fs = std::filesystem;
+	const fs::path path = fs::path(data_root) / rates_folder / rates_file;
+	return load_rate_data(path.string());
 }
 
 std::vector<PriceBar> DataNormalizer::sanitize_prices(const std::vector<PriceBar>& prices) const {

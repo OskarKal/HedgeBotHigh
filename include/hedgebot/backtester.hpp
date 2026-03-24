@@ -56,6 +56,20 @@ struct BacktestResult {
           num_rehedges(0) {}
 };
 
+struct InstrumentBacktestResult {
+    std::string symbol;
+    BacktestResult result;
+};
+
+struct BatchBacktestResult {
+    bool success;
+    std::string message;
+    std::vector<InstrumentBacktestResult> instrument_results;
+    double average_total_pnl;
+
+    BatchBacktestResult() : success(false), average_total_pnl(0.0) {}
+};
+
 class Backtester {
 public:
     explicit Backtester(const BacktestConfig& config = BacktestConfig());
@@ -69,6 +83,12 @@ public:
         const std::vector<RatePoint>& rates,
         const HedgeConfig& hedge_config,
         const ExecutionConfig& execution_config) const;
+
+    BatchBacktestResult run_batch_from_layout(
+        const std::string& data_root,
+        const HedgeConfig& hedge_config,
+        const ExecutionConfig& execution_config,
+        const std::string& rates_folder = "RATES") const;
 
     static double compute_sharpe(const std::vector<double>& pnl_curve);
     static double compute_max_drawdown_pct(const std::vector<double>& equity_curve);

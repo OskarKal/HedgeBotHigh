@@ -29,11 +29,25 @@ struct OptionQuote {
     double mid() const { return 0.5 * (bid + ask); }
 };
 
+struct InstrumentDataBundle {
+    std::string symbol;
+    std::vector<PriceBar> prices;
+    std::vector<OptionQuote> option_surface;
+};
+
 class MarketDataFetcher {
 public:
     std::vector<PriceBar> load_price_data(const std::string& file_path) const;
     std::vector<OptionQuote> load_option_surface(const std::string& file_path) const;
     std::vector<RatePoint> load_rate_data(const std::string& file_path) const;
+
+    std::vector<std::string> discover_instruments(const std::string& data_root) const;
+    InstrumentDataBundle load_instrument_bundle(const std::string& data_root, const std::string& symbol) const;
+    std::vector<InstrumentDataBundle> load_all_instruments(const std::string& data_root) const;
+    std::vector<RatePoint> load_rates_from_layout(
+        const std::string& data_root,
+        const std::string& rates_folder = "RATES",
+        const std::string& rates_file = "rates.csv") const;
 
 private:
     static std::vector<std::string> split_csv_line(const std::string& line);
