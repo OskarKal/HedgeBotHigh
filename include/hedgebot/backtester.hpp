@@ -22,6 +22,8 @@ struct BacktestConfig {
     std::size_t calibration_window_steps;
     std::size_t option_roll_steps;
     double strike_moneyness;
+    OptionType option_type;
+    double option_contracts;
     std::string underlying_symbol;
 
     BacktestConfig()
@@ -33,6 +35,8 @@ struct BacktestConfig {
           calibration_window_steps(60),
           option_roll_steps(120),
           strike_moneyness(1.0),
+          option_type(OptionType::CALL),
+          option_contracts(1.0),
           underlying_symbol("SPOT") {}
 };
 

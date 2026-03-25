@@ -1,0 +1,20 @@
+best_strategy:
+  scenario_name: "LONG_CALL_m0.950_d0.100_g2.000_r86400_c60_o120_q1"
+  data_root: "data"
+  objective:
+    avg_pnl: 332.694
+    avg_sharpe: 0.137302
+  backtest:
+    initial_cash: 100000
+    risk_free_rate: 0.02
+    dividend_yield: 0
+    calibration_window_steps: 60
+    option_roll_steps: 120
+    strike_moneyness: 0.95
+    option_type: "CALL"
+    option_contracts: 1
+  hedge:
+    delta_threshold: 0.1
+    gamma_threshold: 2
+    vega_threshold: 1000
+    rebalance_interval_seconds: 86400

@@ -169,8 +169,9 @@ BacktestResult Backtester::run_from_data(
     }
 
     const double initial_strike = px.front().close * config_.strike_moneyness;
-    OptionData current_option(OptionType::CALL, initial_strike, 30.0 / 365.0, "BT_CALL");
-    double option_qty = 1.0;
+    const std::string opt_symbol = (config_.option_type == OptionType::CALL) ? "BT_CALL" : "BT_PUT";
+    OptionData current_option(config_.option_type, initial_strike, 30.0 / 365.0, opt_symbol);
+    double option_qty = config_.option_contracts;
 
     MarketData md0;
     md0.spot_price = px.front().close;
@@ -192,7 +193,7 @@ BacktestResult Backtester::run_from_data(
         double remaining_t = std::max(1e-6, current_option.expiry() - static_cast<double>(i) * step_years);
         if (config_.option_roll_steps > 0 && (i % config_.option_roll_steps == 0)) {
             const double roll_strike = px[i - 1].close * config_.strike_moneyness;
-            current_option = OptionData(OptionType::CALL, roll_strike, 30.0 / 365.0, "BT_CALL");
+            current_option = OptionData(config_.option_type, roll_strike, 30.0 / 365.0, opt_symbol);
             remaining_t = current_option.expiry();
         }
 
