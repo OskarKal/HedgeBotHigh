@@ -48,6 +48,7 @@ set(HEDGEBOT_SOURCES
     src/backtester.cpp
     src/monte_carlo_simulator.cpp
     src/logger.cpp
+    src/live_trading.cpp
 )
 
 # Create library
@@ -67,6 +68,10 @@ target_include_directories(hedgebot_lib PRIVATE ${CMAKE_SOURCE_DIR}/include)
 add_executable(hedge_bot src/main.cpp)
 target_link_libraries(hedge_bot PRIVATE hedgebot_lib)
 
+# Live trading executable (paper/live-dryrun scaffold)
+add_executable(live_bot src/live_main.cpp)
+target_link_libraries(live_bot PRIVATE hedgebot_lib)
+
 # Enable testing
 enable_testing()
 
@@ -81,6 +86,10 @@ set_target_properties(hedge_bot PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+)
+
+set_target_properties(live_bot PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
 message(STATUS "HedgeBot Build Configuration:")

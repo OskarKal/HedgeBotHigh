@@ -127,6 +127,29 @@ make
 ./bin/hedge_bot
 ```
 
+### Running Live/Paper Loop
+
+The project now includes `live_bot`, which replays real market data in a live-style loop,
+loads strategy settings from `results/best_strategy.yaml`, and emits/executes hedge orders.
+
+1. Configure `.env` in project root (placeholder keys are already provided).
+2. Run in paper mode (default):
+
+```bash
+./bin/live_bot
+```
+
+Execution modes via `.env` (`HEDGEBOT_EXECUTION_MODE`):
+- `paper`: executes through `BrokerSimulator` with cash/equity accounting.
+- `live-dryrun`: emits live-style orders without broker API integration.
+- `live`: currently falls back to `live-dryrun` until real broker adapter is added.
+
+Key `.env` fields:
+- `HEDGEBOT_SYMBOL` (e.g. `SPY`)
+- `HEDGEBOT_DATA_ROOT` (default `data`)
+- `HEDGEBOT_STRATEGY_FILE` (default `results/best_strategy.yaml`)
+- `HEDGEBOT_MAX_STEPS` (how many ticks to run)
+
 ### Running Tests
 
 ```bash
